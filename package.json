@@ -15,6 +15,7 @@
     "chalk": "^5.2.0",
     "ejs": "^3.1.9",
     "gradient-string": "^2.0.2",
-    "inquirer": "^9.1.5"
+    "inquirer": "^9.1.5",
+    "prettier": "^2.8.7"
   }
 }

@@ -7,6 +7,7 @@ import chalk from "chalk";
 import { readFileSync, writeFile } from "fs";
 import * as ejs from "ejs";
 import path from "path";
+import * as prettier from "prettier";
 
 function generateTest(filepath) {
   const code = readFileSync(filepath, "utf-8", (err, data) => {
@@ -98,7 +99,14 @@ function generateTest(filepath) {
     }
 
     if (data) {
-      writeFile(filepath.replace(".ts", ".spec.ts"), data, (err) => {
+      console.log(data);
+      const formatted = prettier.format(data, {
+        parser: "typescript",
+
+      });
+      console.log(formatted);
+
+      writeFile(filepath.replace(".ts", ".spec.ts"), formatted, (err) => {
         if (err) {
           console.log(err);
         }
