@@ -1,0 +1,12 @@
+import { ComponentFixture, TestBed, waitForAsync } from '@angular/core/testing';
+import { IonicModule } from '@ionic/angular'; <% for (const imp of importList)
+{%> import { <%= imp.import%> } from "<%= imp.source%>"; <% } %> xdescribe('<%=
+className%>', () => { let component: <%= className%>; let fixture:
+ComponentFixture<<%= className%>>; <%for (const declareSpy of declareSpyList) {
+%> let <%= declareSpy.var%>: jasmine.SpyObj<<%= declareSpy.type %>>; <% } %>
+beforeEach( waitForAsync(() => { TestBed.configureTestingModule({ declarations:
+[<%= className%>], imports: [IonicModule.forRoot()], }).compileComponents();
+fixture = TestBed.createComponent(<%= className%>); component =
+fixture.componentInstance; fixture.detectChanges(); }) ); it('should create', ()
+=> { expect(component).toBeTruthy(); }); <% for (const fnName of fnNames) { %>
+xit('<%= fnName %>',() => {}); <% } %> });
