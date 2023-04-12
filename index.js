@@ -21,75 +21,110 @@ function generateTest(filepath) {
   let fnNames = [];
   let spyList = [];
   let importList = [];
+  let multiImportList = [];
   let declareSpyList = [];
+  let classImport;
 
   const ast = parse(code, {
     plugins: ["typescript", "decorators", "throwExpressions"],
     sourceType: "module",
   });
 
-  traverse(ast, {
-    ClassDeclaration(path) {
-      if (path.node.type === "ClassDeclaration") {
-        className = path.node.id.name;
-      }
-    },
-    ClassMethod(path) {
-      if (
-        path.node.type === "ClassMethod" &&
-        path.node.kind !== "get" &&
-        path.node.kind !== "set" &&
-        path.node.kind !== "constructor"
-      ) {
-        if (!path.node.key.name.includes("ng")) {
-          fnNames.push(path.node.key.name);
+  try {
+    traverse(ast, {
+      ClassDeclaration(path) {
+        if (path.node.type === "ClassDeclaration") {
+          className = path.node.id.name;
+          const pathArray = filepath.split("/");
+          const filePathLength = pathArray.length;
+          const source = pathArray[filePathLength - 1].replace(".ts", "");
+          classImport = {
+            import: className,
+            source: `./${source}`,
+          };
         }
-      }
+      },
+    });
+    traverse(ast, {
+      ClassMethod(path) {
+        if (
+          path.node.type === "ClassMethod" &&
+          path.node.kind !== "get" &&
+          path.node.kind !== "set" &&
+          path.node.kind !== "constructor"
+        ) {
+          if (!path.node.key.name.includes("ng")) {
+            fnNames.push(path.node.key.name);
+          }
+        }
 
-      if (
-        path.node.type === "ClassMethod" &&
-        path.node.kind === "constructor"
-      ) {
-        path.node.params.forEach((param) => {
-          spyList.push(
-            param.parameter.typeAnnotation.typeAnnotation.typeName.name
-          );
-        });
-        path.node.params.forEach((param) => {
-          declareSpyList.push({
-            var: param.parameter.name,
-            type: param.parameter.typeAnnotation.typeAnnotation.typeName.name,
+        if (
+          path.node.type === "ClassMethod" &&
+          path.node.kind === "constructor"
+        ) {
+          path.node.params.forEach((param) => {
+            if (param.parameter?.typeAnnotation?.typeAnnotation) {
+              spyList.push(
+                param.parameter.typeAnnotation.typeAnnotation.typeName.name
+              );
+            }
           });
-        });
-      }
-    },
-    ImportDeclaration(path) {
-      if (path.node.type === "ImportDeclaration") {
-        if (path.node.specifiers.length === 1) {
-          if (path.node.specifiers[0].imported.name === className) {
+          path.node.params.forEach((param) => {
+            if (
+              param.parameter?.name &&
+              param.parameter?.typeAnnotation?.typeAnnotation
+            ) {
+              declareSpyList.push({
+                var: param.parameter.name,
+                type: param.parameter.typeAnnotation.typeAnnotation.typeName
+                  .name,
+              });
+            }
+          });
+        }
+      },
+      ImportDeclaration(path) {
+        if (path.node.type === "ImportDeclaration") {
+          if (path.node.specifiers.length === 1) {
             importList.push({
-              import: path.node.specifiers[0].imported.name,
+              import: path.node.specifiers[0].local.name,
+              source: path.node.source.value.trim(),
+            });
+          } else {
+            let imports = [];
+            path.node.specifiers.forEach((spec) => {
+              imports.push(spec.imported.name);
+            });
+            multiImportList.push({
+              import: imports,
               source: path.node.source.value,
             });
           }
-          importList.push({
-            import: path.node.specifiers[0].local.name,
-            source: path.node.source.value.trim(),
-          });
         }
-      }
-    },
-  });
+      },
+    });
+  } catch (error) {
+    console.log(error);
+  }
 
-  const newImportList = importList.filter((imp) =>
-    spyList.includes(imp.import)
-  );
+  let newImportList = importList.filter((imp) => spyList.includes(imp.import));
 
+  newImportList.push(classImport);
+  const newMImpList = multiImportList
+    .map((mImp) => {
+      const newImp = mImp.import.filter((m) => spyList.includes(m));
+      return {
+        ...mImp,
+        import: newImp,
+      };
+    })
+    .filter((mImp) => mImp.import.length > 0);
   const template = path.join("./templates/test-component.ejs");
   const data = {
     fnNames: fnNames,
     className: className,
     importList: newImportList,
+    multiList: newMImpList,
     declareSpyList: declareSpyList,
   };
 
@@ -99,12 +134,9 @@ function generateTest(filepath) {
     }
 
     if (data) {
-      console.log(data);
       const formatted = prettier.format(data, {
         parser: "typescript",
-
       });
-      console.log(formatted);
 
       writeFile(filepath.replace(".ts", ".spec.ts"), formatted, (err) => {
         if (err) {
