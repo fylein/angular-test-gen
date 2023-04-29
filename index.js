@@ -23,11 +23,13 @@ function generateTest(filepath) {
   let importList = [];
   let multiImportList = [];
   let declareSpyList = [];
+  let allCallExpList = [];
   let classImport;
 
   const ast = parse(code, {
     plugins: ["typescript", "decorators", "throwExpressions"],
     sourceType: "module",
+    errorRecovery: true,
   });
 
   try {
@@ -54,7 +56,7 @@ function generateTest(filepath) {
           path.node.kind !== "constructor"
         ) {
           if (!path.node.key.name.includes("ng")) {
-            fnNames.push(path.node.key.name);
+            fnNames.push(path.node.key?.name);
           }
         }
 
@@ -65,7 +67,7 @@ function generateTest(filepath) {
           path.node.params.forEach((param) => {
             if (param.parameter?.typeAnnotation?.typeAnnotation) {
               spyList.push(
-                param.parameter.typeAnnotation.typeAnnotation.typeName.name
+                param.parameter.typeAnnotation.typeAnnotation.typeName?.name
               );
             }
           });
@@ -74,11 +76,15 @@ function generateTest(filepath) {
               param.parameter?.name &&
               param.parameter?.typeAnnotation?.typeAnnotation
             ) {
-              declareSpyList.push({
-                var: param.parameter.name,
-                type: param.parameter.typeAnnotation.typeAnnotation.typeName
-                  .name,
-              });
+              if (
+                param.parameter.typeAnnotation.typeAnnotation.typeName?.name
+              ) {
+                declareSpyList.push({
+                  var: param.parameter?.name,
+                  type: param.parameter.typeAnnotation.typeAnnotation.typeName
+                    .name,
+                });
+              }
             }
           });
         }
@@ -93,13 +99,24 @@ function generateTest(filepath) {
           } else {
             let imports = [];
             path.node.specifiers.forEach((spec) => {
-              imports.push(spec.imported.name);
+              imports.push(spec.imported?.name);
             });
             multiImportList.push({
               import: imports,
               source: path.node.source.value,
             });
           }
+        }
+      },
+      CallExpression(path) {
+        if (
+          path.node.callee.object?.property?.name &&
+          path.node.callee?.property?.name
+        ) {
+          allCallExpList.push({
+            type: path.node.callee.object.property.name,
+            val: path.node.callee.property.name,
+          });
         }
       },
     });
@@ -119,6 +136,24 @@ function generateTest(filepath) {
       };
     })
     .filter((mImp) => mImp.import.length > 0);
+
+  const spyMap = new Map();
+
+  declareSpyList.forEach((spy) => {
+    spyMap.set(spy.var, {
+      type: spy.type,
+      values: [],
+    });
+  });
+
+  allCallExpList.forEach((callExp) => {
+    if (spyMap.has(callExp.type)) {
+      const currentSpy = spyMap.get(callExp.type);
+      currentSpy.values = [...currentSpy.values, callExp.val];
+      spyMap.set(callExp.type, currentSpy);
+    }
+  });
+
   const template = path.join("./templates/test-component.ejs");
   const data = {
     fnNames: fnNames,
@@ -126,6 +161,7 @@ function generateTest(filepath) {
     importList: newImportList,
     multiList: newMImpList,
     declareSpyList: declareSpyList,
+    spyMap: spyMap,
   };
 
   ejs.renderFile(template, data, {}, (err, data) => {

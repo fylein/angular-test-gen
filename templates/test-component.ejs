@@ -6,9 +6,11 @@ mImp of multiList) { %> import { <% for (const m of mImp.import) { %> <%= m%>,
 let component: <%= className%>; let fixture: ComponentFixture<<%= className%>>;
 <%for (const declareSpy of declareSpyList) { %> let <%= declareSpy.var%>:
 jasmine.SpyObj<<%= declareSpy.type %>>; <% } %> beforeEach( waitForAsync(() => {
+<% for (const spy of spyMap.entries()) { %> const <%= spy[0]%>Spy =
+jasmine.createSpyObj('<%= spy[1].type%>' );<% } %>
 TestBed.configureTestingModule({ declarations: [<%= className%>], imports:
-[IonicModule.forRoot()], }).compileComponents(); fixture =
+[IonicModule.forRoot()], providers:[ ] }).compileComponents(); fixture =
 TestBed.createComponent(<%= className%>); component = fixture.componentInstance;
-fixture.detectChanges(); }) ); it('should create', () => {
+fixture.detectChanges(); })); it('should create', () => {
 expect(component).toBeTruthy(); }); <% for (const fnName of fnNames) { %>
 xit('<%= fnName %>',() => {}); <% } %> });
